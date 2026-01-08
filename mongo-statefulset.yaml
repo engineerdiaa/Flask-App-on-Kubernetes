@@ -1,0 +1,63 @@
+# Config for MongoDB using StatefulSet
+#
+# ARCHITECTURAL NOTES:
+# 1. Resource Type: StatefulSet
+#    - Chosen over "Deployment" because databases require stable network identities
+#      and ordered deployment to ensure data integrity.
+#
+# 2. Persistence Strategy: volumeClaimTemplates
+#    - Implements the "Hard Drive Contract" to bind persistent storage (1Gi)
+#      to the Pod. Ensures data survives Pod restarts/crashes.
+#
+# 3. Image Strategy:
+#    - Uses official 'mongo:latest' (Trusted/Public image), distinct from
+#      the custom application image used in the Flask deployment.
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb-service
+spec:
+  ports:
+    - port: 27017
+      targetPort: 27017
+  clusterIP: None # Headless service
+  selector:
+    app: mongodb
+---
+apiVersion: apps/v1
+kind: StatefulSet 
+metadata:
+  name: mongodb
+spec:
+  serviceName: "mongodb-service"
+  replicas: 1 # N of pods to run
+  selector:
+    matchLabels:
+      app: mongodb
+  template:
+    metadata:
+      labels:
+        app: mongodb
+    spec:
+      containers:
+        - name: mongodb
+          image: mongo:latest
+          env:
+            - name: MONGO_INITDB_ROOT_USERNAME
+              value: "admin"
+            - name: MONGO_INITDB_ROOT_PASSWORD
+              value: "admin"
+          ports:
+            - containerPort: 27017
+          volumeMounts:
+            - name: mongo-storage
+              mountPath: /data/db
+  volumeClaimTemplates:
+    - metadata:
+        name: mongo-storage
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        resources:
+          requests:
+            storage: 1Gi
